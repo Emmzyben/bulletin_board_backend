@@ -22,7 +22,19 @@ const getWorkspaces = async (req, res) => {
 
 const createWorkspace = async (req, res) => {
   try {
-    const { name, ecosystem, owner_email, members, plan, member_count } = req.body;
+    const { name, ecosystem, members, plan = 'free', member_count = 1 } = req.body;
+    const owner_email = req.user.email;
+
+    if (!name?.trim() || !ecosystem) {
+      return res.status(400).json({ error: 'Workspace name and ecosystem are required' });
+    }
+
+    const parsedMembers = typeof members === 'string'
+      ? (() => { try { return JSON.parse(members); } catch { return []; } })()
+      : members;
+    const workspaceMembers = Array.isArray(parsedMembers) && parsedMembers.length > 0
+      ? parsedMembers
+      : [{ email: owner_email, role: 'owner', status: 'active' }];
     
     // Check for existing workspace owned by user
     const existing = await Workspace.findOne({ where: { owner_email } });
@@ -31,12 +43,12 @@ const createWorkspace = async (req, res) => {
     }
 
     const ws = await Workspace.create({
-      name,
+      name: name.trim(),
       ecosystem,
       owner_email,
-      members,
+      members: workspaceMembers,
       plan,
-      member_count
+      member_count: Number.isInteger(member_count) ? member_count : workspaceMembers.length
     });
 
     // Create default channels
